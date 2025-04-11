@@ -68,27 +68,27 @@ void run_benchmark(u32 len, u32 seed) {
     }
 }
 
-void view(u32 seed) {
-    print_s("RVV e32m1 VLMAX=");print_long(get_vlmax());print_s("\n");
-    u32 state[16]  __attribute__((aligned(16))) ;
-    chacha_buf result  __attribute__((aligned(16))) ;
-    for (int i = 0; i < 16; i++) state[i] = seed ^ i;
-    print_s("Initial state: \n");
-    for (int i = 0; i < 16; i++) {
-        print_s("state[");
-        print_long(i);
-        print_s("] = ");
-        print_hex32(state[i]);
-    }
-    chacha20(&result, state);
-    print_s("Chacha1 state: \n");
-    for (int i = 0; i < 16; i++) {
-        print_s("result[");
-        print_long(i);
-        print_s("] = ");
-        print_hex32(result.u[i]);
-    }
-}
+// void view(u32 seed) {
+//     print_s("RVV e32m1 VLMAX=");print_long(get_vlmax());print_s("\n");
+//     u32 state[16]  __attribute__((aligned(16))) ;
+//     chacha_buf result  __attribute__((aligned(16))) ;
+//     for (int i = 0; i < 16; i++) state[i] = seed ^ i;
+//     print_s("Initial state: \n");
+//     for (int i = 0; i < 16; i++) {
+//         print_s("state[");
+//         print_long(i);
+//         print_s("] = ");
+//         print_hex32(state[i]);
+//     }
+//     chacha20(&result, state);
+//     print_s("Chacha1 state: \n");
+//     for (int i = 0; i < 16; i++) {
+//         print_s("result[");
+//         print_long(i);
+//         print_s("] = ");
+//         print_hex32(result.u[i]);
+//     }
+// }
 
 int main() {
     print_s("Test Start!\n");
