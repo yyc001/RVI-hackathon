@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>RISC-V CPU Simulator</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+    }
+    /* 头部区域，放置按钮 */
+    .header {
+      background-color: #f5f5f5;
+      padding: 10px;
+      border-bottom: 1px solid #ccc;
+      text-align: center;
+    }
+    .header button {
+      margin-right: 10px;
+      padding: 10px 15px;
+      font-size: 14px;
+    }
+    /* 主体采用左右布局 */
+    .container {
+      display: flex;
+      height: calc(100vh - 50px);
+    }
+    /* 左侧面板：寄存器显示 */
+    .left-panel {
+      flex: 1;
+      padding: 20px;
+      border-right: 1px solid #ccc;
+      box-sizing: border-box;
+      overflow-y: auto;
+    }
+    /* 右侧面板：分成反汇编视图（上）和终端输出（下） */
+    .right-panel {
+      flex: 1;
+      padding: 20px;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+    }
+    .section {
+      margin-bottom: 20px;
+    }
+    .flex-grow {
+      flex-grow: 1;
+      overflow-y: auto;
+    }
+    /* 寄存器区域：采用两列布局 */
+    .registers {
+      display: flex;
+      gap: 20px;
+    }
+    .reg-col {
+      flex: 1;
+    }
+    .reg-entry {
+      font-family: monospace;
+      padding: 2px 0;
+    }
+    .highlight {
+      font-weight: bold;
+      background-color: yellow;
+    }
+    /* 通用样式：pre 标签显示反汇编和终端输出 */
+    pre {
+      background: #f4f4f4;
+      padding: 10px;
+      border: 1px solid #ddd;
+      overflow: auto;
+      font-family: monospace;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <!-- 头部：按钮区域 -->
+  <div class="header">
+      <button onclick="step()">执行一步</button>
+      <button onclick="resetCPU()">重置</button>
+  </div>
+  
+  <div class="container">
+    <!-- 左侧：寄存器显示区域 -->
+    <div class="left-panel">
+        <h2>CPU 寄存器</h2>
+        <div id="registers" class="registers">
+            <div class="reg-col" id="regCol1"></div>
+            <div class="reg-col" id="regCol2"></div>
+        </div>
+    </div>
+    
+    <!-- 右侧：上半部分显示反汇编，下半部分显示终端输出 -->
+    <div class="right-panel">
+        <div class="section flex-grow">
+            <h2>反汇编视图</h2>
+            <pre id="disasm">等待反汇编...</pre>
+        </div>
+        <div class="section">
+            <h2>终端输出</h2>
+            <pre id="terminal">等待终端输出...</pre>
+        </div>
+    </div>
+  </div>
+  
+  <script>
+    // 保存上一次寄存器状态，用于比对变化
+    let prevRegs = Array(32).fill(null);
+    
+    // 更新寄存器显示：分两列显示 x0–x15 和 x16–x31
+    function updateCpuState(data) {
+      const col1 = document.getElementById("regCol1");
+      const col2 = document.getElementById("regCol2");
+      col1.innerHTML = "";
+      col2.innerHTML = "";
+      // 第一列：x0 - x15
+      for (let i = 0; i < 16; i++) {
+        let val = "0x" + data.gpr[i].toString(16).padStart(8, "0");
+        let div = document.createElement("div");
+        div.className = "reg-entry" + ((prevRegs[i] !== null && prevRegs[i] !== data.gpr[i]) ? " highlight" : "");
+        div.textContent = "x" + i + ": " + val;
+        col1.appendChild(div);
+      }
+      // 第二列：x16 - x31
+      for (let i = 16; i < 32; i++) {
+        let val = "0x" + data.gpr[i].toString(16).padStart(8, "0");
+        let div = document.createElement("div");
+        div.className = "reg-entry" + ((prevRegs[i] !== null && prevRegs[i] !== data.gpr[i]) ? " highlight" : "");
+        div.textContent = "x" + i + ": " + val;
+        col2.appendChild(div);
+      }
+      // 保存当前状态方便下次比较
+      prevRegs = data.gpr.slice();
+    }
+    
+    async function step() {
+      const res = await fetch("/step", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({})
+      });
+      const data = await res.json();
+      updateCpuState(data);
+      updateDisasm();
+      updateTerminal();
+    }
+    
+    async function resetCPU() {
+      await fetch("/reset", { method: "POST" });
+      prevRegs = Array(32).fill(null);
+      document.getElementById("regCol1").innerHTML = "";
+      document.getElementById("regCol2").innerHTML = "";
+      updateDisasm();
+      updateTerminal();
+    }
+    
+    // 更新反汇编视图，若某行的地址与当前 PC 匹配则高亮显示
+    async function updateDisasm() {
+      const res = await fetch("/disasm");
+      const data = await res.json();
+      let disasmLines = data.disasm.split("\n");
+      let currentPC = data.pc;
+      disasmLines = disasmLines.map(line => {
+        let match = line.match(/^\s*(0x[0-9a-fA-F]+):/);
+        if (match) {
+          let addr = parseInt(match[1], 16);
+          if (addr === currentPC) {
+            return '<span class="highlight">' + line + '</span>';
+          }
+        }
+        return line;
+      });
+      document.getElementById("disasm").innerHTML =
+          "当前 PC: 0x" + currentPC.toString(16) + "\n\n" + disasmLines.join("\n");
+    }
+    
+    // 更新终端输出，调用 /terminal 接口获取输出内容
+    async function updateTerminal() {
+      const res = await fetch("/terminal");
+      const data = await res.json();
+      document.getElementById("terminal").innerText = data.terminal || "无终端输出";
+    }
+    
+    // 定时刷新终端输出（例如每1秒刷新一次）
+    setInterval(updateTerminal, 1000);
+  </script>
+</body>
+</html>
